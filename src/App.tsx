@@ -31,7 +31,9 @@ export default function App(){
         if(!rendererRef.current && canvasRef.current){
           rendererRef.current = new Renderer(canvasRef.current)
         }
-        rendererRef.current?.render(snap, mapMode)
+        if(rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
+        }
       } else if(data.type === 'INSPECTOR') {
         setInspector(data.payload)
       }
@@ -45,9 +47,11 @@ export default function App(){
     worker.postMessage({type:'SET_CONFIG', config: cfg})
   }, [cfg, worker])
 
+  // Handle map mode changes by re-rendering
   useEffect(()=>{
-    // Re-render on map mode change (request a redraw)
-    worker.postMessage({type:'REQUEST_FRAME'})
+    if(rendererRef.current && canvasRef.current) {
+      worker.postMessage({type:'REQUEST_FRAME'})
+    }
   }, [mapMode, worker])
 
   // Run/pause
