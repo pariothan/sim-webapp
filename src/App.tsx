@@ -39,50 +39,34 @@ export default function App() {
       if (data.type === 'ERROR') {
         console.error('Worker error:', data.payload)
       } else if (data.type === 'TICK') {
+      if (data.type === 'ERROR') {
+        console.error('Worker error:', data.payload)
+      } else if (data.type === 'TICK') {
         const snap: SimStateSnapshot = data.payload
         setTick(snap.tick)
         setStats(snap.stats)
         if (!rendererRef.current && canvasRef.current) {
           rendererRef.current = new Renderer(canvasRef.current)
         }
-        if (rendererRef.current) {
-          rendererRef.current.render(snap, mapMode)
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = rect.width + 'px'
+      canvas.style.height = rect.height + 'px'
+      
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
         }
-      } else if (data.type === 'FRAME') {
-        const snap: SimStateSnapshot = data.payload
-        if (rendererRef.current) {
-          rendererRef.current.render(snap, mapMode)
-        }
-      } else if (data.type === 'INSPECTOR') {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
         setInspector(data.payload)
       }
     }
     worker.addEventListener('message', onMsg)
     return () => worker.removeEventListener('message', onMsg)
-  }, [worker, mapMode])
-
-  // Handle canvas resize
-  const handleResize = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
-    canvas.style.width = rect.width + 'px'
-    canvas.style.height = rect.height + 'px'
-    
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.scale(dpr, dpr)
-    }
-  }
-
-  // Initial canvas setup
-  useEffect(() => {
-    // Use setTimeout to ensure DOM is ready
-    setTimeout(handleResize, 100)
-  }, [])
+  }, [worker])
 
   // React to cfg changes
   useEffect(() => {
