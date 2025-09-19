@@ -1,314 +1,181 @@
-import { SimulationState } from '../core/Simulation'
-import { Language } from '../core/Language'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Toolbar } from './ui/Toolbar'
+import { ConfigPanel } from './ui/ConfigPanel'
+import { StatsPanel } from './ui/StatsPanel'
+import { Renderer } from './vis/Renderer'
+import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData, SimulationStats } from './engine/types'
+import { Inspector } from './ui/Inspector'
 
-export type MapMode = 'LANGUAGE' | 'PHONEME_COUNT' | 'SPEAKER_COUNT' | 'PRESTIGE' | 'FAMILY_TREE' | 'VOCABULARY_SIZE'
+const workerUrl = new URL('./worker.ts', import.meta.url).href
 
-export class MapRenderer {
-  private canvas: HTMLCanvasElement
-  private ctx: CanvasRenderingContext2D
-  private lastState: SimulationState | null = null
-  private languageColors = new Map<number, string>()
-  private familyColors = new Map<number, string>()
+export default function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [cfg, setCfg] = useState<SimConfig>({ ...defaultConfig })
+  const [running, setRunning] = useState(true)
+  const [mapMode, setMapMode] = useState<MapMode>('LANGUAGE')
+  const [tick, setTick] = useState(0)
+  const [stats, setStats] = useState<SimulationStats>({
+    totalCommunities: 0,
+    speakingCommunities: 0,
+    totalLanguages: 0,
+    largestLanguage: 0,
+    languageDistribution: {},
+    topLanguages: [],
+    extinctLanguages: 0,
+    newLanguagesThisTick: 0
+  })
+  const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null)
+  const [inspector, setInspector] = useState<InspectorData | null>(null)
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Could not get 2D context')
-    this.ctx = ctx
-  }
+  const worker = useMemo(() => new Worker(workerUrl, { type: 'module' }), [])
+  const rendererRef = useRef<Renderer | null>(null)
 
-  render(state: SimulationState, mode: MapMode): void {
-    this.lastState = state
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-
-    const cellWidth = this.canvas.width / state.world.width
-    const cellHeight = this.canvas.height / state.world.height
-
-    // Render tiles
-    for (let y = 0; y < state.world.height; y++) {
-      for (let x = 0; x < state.world.width; x++) {
-        this.renderTile(x, y, cellWidth, cellHeight, state, mode)
-      }
-    }
-
-    // Render borders
-    this.renderBorders(state, mode, cellWidth, cellHeight)
-  }
-
-  private renderTile(
-    x: number, 
-    y: number, 
-    cellWidth: number, 
-    cellHeight: number, 
-    state: SimulationState, 
-    mode: MapMode
-  ): void {
-    const tile = state.world.getTile(x, y)
-    if (!tile) return
-
-    const pixelX = x * cellWidth
-    const pixelY = y * cellHeight
-
-    if (!tile.isLand) {
-      // Water
-      this.ctx.fillStyle = '#1a237e'
-      this.ctx.fillRect(pixelX, pixelY, cellWidth, cellHeight)
-      return
-    }
-
-    // Land
-    const community = state.communities.find(c => c.id === tile.communityId)
-    if (!community || !community.hasLanguage()) {
-      this.ctx.fillStyle = '#8d6e63'
-      this.ctx.fillRect(pixelX, pixelY, cellWidth, cellHeight)
-      return
-    }
-
-    const language = state.languages.get(community.languageId!)
-    if (!language) {
-      this.ctx.fillStyle = '#8d6e63'
-      this.ctx.fillRect(pixelX, pixelY, cellWidth, cellHeight)
-      return
-    }
-
-    // Colored tile based on mode
-    this.ctx.fillStyle = this.getColor(language, community, mode, state)
-    this.ctx.fillRect(pixelX, pixelY, cellWidth, cellHeight)
-
-    // Text overlay
-    if (cellWidth > 20 && cellHeight > 15) {
-      const text = this.getText(language, mode)
-      if (text) {
-        this.ctx.fillStyle = this.getTextColor(mode)
-        this.ctx.font = `${Math.min(12, cellHeight * 0.6)}px monospace`
-        this.ctx.textAlign = 'center'
-        this.ctx.textBaseline = 'middle'
-        this.ctx.fillText(text, pixelX + cellWidth / 2, pixelY + cellHeight / 2)
-      }
-    }
-  }
-
-  private getColor(language: Language, community: any, mode: MapMode, state: SimulationState): string {
-    switch (mode) {
-      case 'LANGUAGE':
-        return this.getLanguageColor(language.id)
-      
-      case 'FAMILY_TREE':
-        return this.getFamilyColor(language.familyId)
-      
-      case 'PHONEME_COUNT':
-        const t = Math.min(1, language.phonemes.length / 30)
-        return `hsl(${240 - t * 120}, 70%, ${30 + t * 40}%)`
-      
-      case 'SPEAKER_COUNT':
-        const speakers = state.communities.filter(c => c.languageId === language.id).length
-        const intensity = Math.min(1, speakers / 10)
-        const gray = Math.floor(50 + intensity * 150)
-        return `rgb(${gray}, ${gray}, ${gray})`
-      
-      case 'PRESTIGE':
-        const prestige = language.prestige
-        return `hsl(${prestige * 60}, 80%, ${30 + prestige * 40}%)`
-      
-      case 'VOCABULARY_SIZE':
-        const vocabSize = language.vocabulary.size
-        const vocabT = Math.min(1, vocabSize / 100)
-        return `hsl(${120 + vocabT * 120}, 60%, ${30 + vocabT * 30}%)`
-      
-      default:
-        return '#666666'
-    }
-  }
-
-  private getLanguageColor(languageId: number): string {
-    if (!this.languageColors.has(languageId)) {
-      const hue = (languageId * 137.5) % 360
-      const saturation = 60 + (languageId % 40)
-      const lightness = 40 + (languageId % 30)
-      this.languageColors.set(languageId, `hsl(${hue}, ${saturation}%, ${lightness}%)`)
-    }
-    return this.languageColors.get(languageId)!
-  }
-
-  private getFamilyColor(familyId: number): string {
-    if (!this.familyColors.has(familyId)) {
-      const hue = (familyId * 97.3) % 360
-      const saturation = 70 + (familyId % 30)
-      const lightness = 45 + (familyId % 25)
-      this.familyColors.set(familyId, `hsl(${hue}, ${saturation}%, ${lightness}%)`)
-    }
-    return this.familyColors.get(familyId)!
-  }
-
-  private getText(language: Language, mode: MapMode): string {
-    switch (mode) {
-      case 'PHONEME_COUNT':
-        return language.phonemes.length.toString()
-      case 'VOCABULARY_SIZE':
-        return language.vocabulary.size.toString()
-      case 'PRESTIGE':
-        return Math.round(language.prestige * 100) + '%'
-      default:
-        return language.getSampleWord().substring(0, 4)
-    }
-  }
-
-  private getTextColor(mode: MapMode): string {
-    return mode === 'SPEAKER_COUNT' ? '#000000' : '#ffffff'
-  }
-
-  private renderBorders(state: SimulationState, mode: MapMode, cellWidth: number, cellHeight: number): void {
-    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'
-    this.ctx.lineWidth = 1
-
-    for (let y = 0; y < state.world.height; y++) {
-      for (let x = 0; x < state.world.width; x++) {
-        const tile = state.world.getTile(x, y)
-        if (!tile?.isLand) continue
-
-        const community = state.communities.find(c => c.id === tile.communityId)
-        if (!community?.hasLanguage()) continue
-
-        const groupId = this.getGroupId(community.languageId!, mode, state)
-        
-        // Check right neighbor
-        const rightTile = state.world.getTile(x + 1, y)
-        if (rightTile?.isLand) {
-          const rightCommunity = state.communities.find(c => c.id === rightTile.communityId)
-          const rightGroupId = rightCommunity?.hasLanguage() ? 
-            this.getGroupId(rightCommunity.languageId!, mode, state) : null
-          
-          if (rightGroupId !== groupId) {
-            this.ctx.beginPath()
-            this.ctx.moveTo((x + 1) * cellWidth, y * cellHeight)
-            this.ctx.lineTo((x + 1) * cellWidth, (y + 1) * cellHeight)
-            this.ctx.stroke()
-          }
+  // Init worker
+  useEffect(() => {
+    worker.postMessage({ type: 'INIT', config: cfg })
+    const onMsg = (e: MessageEvent) => {
+      const data = e.data
+      console.log('App received message:', data.type)
+      if (data.type === 'ERROR') {
+        console.error('Worker error:', data.payload)
+      } else if (data.type === 'TICK') {
+        const snap: SimStateSnapshot = data.payload
+        setTick(snap.tick)
+        setStats(snap.stats)
+        if (!rendererRef.current && canvasRef.current) {
+          rendererRef.current = new Renderer(canvasRef.current)
         }
+        if (rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
+        }
+      } else if (data.type === 'INSPECTOR') {
+        setInspector(data.payload)
+      }
+    }
+    worker.addEventListener('message', onMsg)
+    return () => worker.removeEventListener('message', onMsg)
+  }, [worker, mapMode])
 
-        // Check bottom neighbor
-        const bottomTile = state.world.getTile(x, y + 1)
-        if (bottomTile?.isLand) {
-          const bottomCommunity = state.communities.find(c => c.id === bottomTile.communityId)
-          const bottomGroupId = bottomCommunity?.hasLanguage() ? 
-            this.getGroupId(bottomCommunity.languageId!, mode, state) : null
-          
-          if (bottomGroupId !== groupId) {
-            this.ctx.beginPath()
-            this.ctx.moveTo(x * cellWidth, (y + 1) * cellHeight)
-            this.ctx.lineTo((x + 1) * cellWidth, (y + 1) * cellHeight)
-            this.ctx.stroke()
-          }
+  // React to cfg changes
+  useEffect(() => {
+    worker.postMessage({ type: 'SET_CONFIG', config: cfg })
+  }, [cfg, worker])
+
+  // Handle map mode changes by re-rendering
+  useEffect(() => {
+    if (rendererRef.current && canvasRef.current) {
+      worker.postMessage({ type: 'REQUEST_FRAME' })
+    }
+  }, [mapMode, worker])
+
+  // Run/pause
+  useEffect(() => {
+    worker.postMessage({ type: running ? 'RESUME' : 'PAUSE' })
+  }, [running, worker])
+
+  // Canvas resize
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = rect.width + 'px'
+      canvas.style.height = rect.height + 'px'
+      
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
+      
+      worker.postMessage({ type: 'REQUEST_FRAME' })
+    }
+    
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [worker])
+
+  // Hover tooltip
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onMove = (ev: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      const hit = rendererRef.current?.hitTest(x, y)
+      if (hit) {
+        setTooltip({ x: ev.clientX, y: ev.clientY, text: hit })
+      } else {
+        setTooltip(null)
+      }
+    }
+    canvas.addEventListener('mousemove', onMove)
+    return () => canvas.removeEventListener('mousemove', onMove)
+  }, [])
+
+  // Click to open inspector
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onClick = (ev: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      if (rendererRef.current) {
+        const snap = (rendererRef.current as any).lastSnap as SimStateSnapshot | null
+        if (snap) {
+          const cellW = canvas.width / snap.world.w
+          const cellH = canvas.height / snap.world.h
+          const gx = Math.floor(x / cellW)
+          const gy = Math.floor(y / cellH)
+          worker.postMessage({ type: 'CLICK_AT', x: gx, y: gy })
         }
       }
     }
-  }
+    canvas.addEventListener('click', onClick)
+    return () => canvas.removeEventListener('click', onClick)
+  }, [worker])
 
-  private getGroupId(languageId: number, mode: MapMode, state: SimulationState): number {
-    if (mode === 'FAMILY_TREE') {
-      const language = state.languages.get(languageId)
-      return language?.familyId || languageId
-    }
-    return languageId
-  }
+  return (
+    <div className="app">
+      <div className="toolbar">
+        <Toolbar
+          running={running}
+          onToggleRun={() => setRunning(v => !v)}
+          mapMode={mapMode}
+          setMapMode={setMapMode}
+          onNewWorld={() => worker.postMessage({ type: 'NEW_WORLD' })}
+          onReset={() => worker.postMessage({ type: 'RESET' })}
+          tick={tick}
+          stats={stats}
+        />
+      </div>
 
-  getTooltip(x: number, y: number): string | null {
-    if (!this.lastState) return null
+      <div className="sidebar">
+        <ConfigPanel cfg={cfg} setCfg={setCfg} />
+        <StatsPanel stats={stats} tick={tick} />
+      </div>
 
-    const cellWidth = this.canvas.width / this.lastState.world.width
-    const cellHeight = this.canvas.height / this.lastState.world.height
-    
-    const tileX = Math.floor(x / cellWidth)
-    const tileY = Math.floor(y / cellHeight)
-    
-    const tile = this.lastState.world.getTile(tileX, tileY)
-    if (!tile) return null
-    
-    if (!tile.isLand) return 'Water'
-    
-    const community = this.lastState.communities.find(c => c.id === tile.communityId)
-    if (!community) return 'Empty land'
-    
-    if (!community.hasLanguage()) {
-      return `No language • Population: ${community.population} • Prestige: ${Math.round(community.prestige * 100)}%`
-    }
-    
-    const language = this.lastState.languages.get(community.languageId!)
-    if (!language) return 'Unknown language'
-    
-    const speakers = this.lastState.communities.filter(c => c.languageId === language.id).length
-    
-    return `${language.name} • Phonemes: ${language.phonemes.length} • Speakers: ${speakers} • Vocab: ${language.vocabulary.size} • Gen: ${language.generation}`
-  }
-
-  getInspectorData(x: number, y: number): any {
-    if (!this.lastState) return null
-
-    const cellWidth = this.canvas.width / this.lastState.world.width
-    const cellHeight = this.canvas.height / this.lastState.world.height
-    
-    const tileX = Math.floor(x / cellWidth)
-    const tileY = Math.floor(y / cellHeight)
-    
-    const tile = this.lastState.world.getTile(tileX, tileY)
-    if (!tile?.isLand) return null
-    
-    const community = this.lastState.communities.find(c => c.id === tile.communityId)
-    if (!community?.hasLanguage()) return null
-    
-    const language = this.lastState.languages.get(community.languageId!)
-    if (!language) return null
-
-    const speakers = this.lastState.communities.filter(c => c.languageId === language.id).length
-    const neighbors = this.lastState.world.getNeighbors(community.x, community.y)
-    const contactLanguages = neighbors
-      .map(n => this.lastState!.communities.find(c => c.id === n.tile.communityId))
-      .filter(c => c?.hasLanguage() && c.languageId !== language.id)
-      .map(c => this.lastState!.languages.get(c!.languageId!))
-      .filter(l => l)
-      .map(l => l!.name)
-
-    const lexiconSample = Array.from(language.vocabulary.entries())
-      .slice(0, 20)
-      .map(([meaning, word]) => ({
-        meaning,
-        word: word.form,
-        borrowed: word.borrowed
-      }))
-
-    return {
-      community: {
-        id: community.id,
-        x: community.x,
-        y: community.y,
-        languageId: community.languageId,
-        population: community.population,
-        prestige: community.prestige
-      },
-      language: {
-        id: language.id,
-        name: language.name,
-        phonemeCount: language.phonemes.length,
-        phonemeInventory: language.phonemes,
-        prestige: language.prestige,
-        familyId: language.familyId,
-        generation: language.generation,
-        conservatism: language.conservatism,
-        parentId: language.parentId,
-        vocabSize: language.vocabulary.size,
-        sampleWord: language.getSampleWord(),
-        creationTick: language.createdAt,
-        lastEvolved: language.lastChanged,
-        speakerCount: speakers,
-        lexiconSample,
-        contactLanguages,
-        evolutionHistory: [
-          `Created at tick ${language.createdAt}`,
-          `Last changed at tick ${language.lastChanged}`,
-          `Generation ${language.generation} of family ${language.familyId}`,
-          language.parentId ? `Descended from language ${language.parentId}` : 'Root language'
-        ]
-      }
-    }
-  }
+      <div className="main">
+        <canvas ref={canvasRef} />
+        <div className="legend">
+          Tick: {tick} • Mode: {mapMode.replace(/_/g, ' ')} • Languages: {stats.totalLanguages}
+        </div>
+        {tooltip && (
+          <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+            {tooltip.text}
+          </div>
+        )}
+        {inspector && (
+          <Inspector data={inspector} onClose={() => setInspector(null)} />
+        )}
+      </div>
+    </div>
+  )
 }
