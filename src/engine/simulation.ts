@@ -180,16 +180,21 @@ function attemptLanguageSpread(
 ): void {
   if (neighbors.length === 0) return
   
+  // Prevent spreading to too many neighbors at once
+  const maxSpreads = 1
+  let spreads = 0
+  
   const spreadStrength = language.prestige * community.prestige
   
   for (const neighbor of neighbors) {
-    if (neighbor.languageId === community.languageId) continue
+    if (neighbor.languageId === community.languageId || spreads >= maxSpreads) continue
     
     const spreadProb = Math.min(0.3, spreadStrength * 0.1)
     if (Math.random() < spreadProb) {
       const oldLangId = neighbor.languageId
       neighbor.languageId = community.languageId
       neighbor.prestige = (neighbor.prestige + community.prestige) / 2
+      spreads++
       
       // Check if old language became extinct
       if (oldLangId >= 0) {
@@ -200,7 +205,7 @@ function attemptLanguageSpread(
         }
       }
       
-      return // Only spread to one neighbor per step
+      break // Only spread to one neighbor per step
     }
   }
 }
@@ -298,6 +303,9 @@ function getContactLanguages(languageId: number, sim: SimInternal): Language[] {
 function attemptLanguageAcquisition(community: Community, sim: SimInternal): void {
   const { world } = sim
   const { w, h, tiles } = world
+  
+  // Prevent infinite acquisition attempts
+  if (community.languageId >= 0) return
   
   // Find neighboring communities with languages
   const neighbors = getNeighbors(community.x, community.y, w, h)

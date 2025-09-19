@@ -111,10 +111,13 @@ export class PhonologicalRuleSet {
 
   applyRules(word: string[], tick: number): string[] {
     let result = [...word]
+    let iterations = 0
+    const maxIterations = 10 // Prevent infinite rule application
     
     for (const rule of this.rules) {
-      if (tick >= rule.startTick && Math.random() < rule.probability) {
+      if (tick >= rule.startTick && Math.random() < rule.probability && iterations < maxIterations) {
         result = this.applyRule(result, rule)
+        iterations++
       }
     }
     
@@ -123,9 +126,11 @@ export class PhonologicalRuleSet {
 
   private applyRule(word: string[], rule: PhonologicalRule): string[] {
     const result: string[] = []
+    let changes = 0
+    const maxChanges = 5 // Prevent excessive changes in one pass
     
     for (let i = 0; i < word.length; i++) {
-      if (word[i] === rule.source) {
+      if (word[i] === rule.source && changes < maxChanges) {
         // Check context
         const leftOk = !rule.leftContext || 
           (i > 0 && this.matchesContext(word[i-1], rule.leftContext))
@@ -135,6 +140,7 @@ export class PhonologicalRuleSet {
         if (leftOk && rightOk && Math.random() < rule.strength) {
           if (rule.target !== '∅') {
             result.push(rule.target)
+            changes++
           }
           // Skip if target is deletion (∅)
         } else {

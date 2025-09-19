@@ -90,8 +90,8 @@ export function createLanguage(parent?: Language, tick: number = 0): Language {
 }
 
 export function evolveLanguage(lang: Language, tick: number, contactLanguages: Language[] = []): void {
-  // Prevent excessive evolution calls
-  if (tick - lang.lastEvolved < 5) return
+  // Prevent excessive evolution calls and infinite recursion
+  if (tick - lang.lastEvolved < 5 || tick === lang.lastEvolved) return
   
   lang.lastEvolved = tick
   
@@ -259,9 +259,14 @@ function generateWord(inventory: string[]): string {
 function evolveWord(word: string, inventory: string[], rules?: PhonologicalRuleSet, tick?: number): string {
   let phonemes = word.split('')
   
+  // Prevent infinite evolution
+  if (phonemes.length === 0) return 'a'
+  
   // Apply phonological rules if available
   if (rules && tick !== undefined) {
     phonemes = rules.applyRules(phonemes, tick)
+    // Ensure we still have phonemes after rule application
+    if (phonemes.length === 0) phonemes = ['a']
   }
   
   // Random mutations
