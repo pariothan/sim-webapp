@@ -49,19 +49,26 @@ export class Renderer {
           const c = communities[cid - 1]
           if (!c) continue
           
-          const lang = languages.get(c.languageId)!
-          ctx.fillStyle = this.colorFor(mode, lang, c.population, c.prestige)
+          const lang = languages.get(c.languageId)
+          if (!lang) {
+            // Community without language - use default gray color
+            ctx.fillStyle = '#888888'
+          } else {
+            ctx.fillStyle = this.colorFor(mode, lang, c.population, c.prestige)
+          }
           ctx.fillRect(tileX, tileY, tileW, tileH)
           
           // Draw text (sample word or abbreviated name)
-          const text = this.getDisplayText(lang, cellW, cellH, mode)
-          if (text && cellW > 20 && cellH > 15) {
-            ctx.fillStyle = this.getTextColor(mode, lang)
-            ctx.fillText(
-              text, 
-              tileX + tileW / 2, 
-              tileY + tileH / 2
-            )
+          if (lang) {
+            const text = this.getDisplayText(lang, cellW, cellH, mode)
+            if (text && cellW > 20 && cellH > 15) {
+              ctx.fillStyle = this.getTextColor(mode, lang)
+              ctx.fillText(
+                text, 
+                tileX + tileW / 2, 
+                tileY + tileH / 2
+              )
+            }
           }
         }
       }

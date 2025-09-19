@@ -91,8 +91,8 @@ function seedCommunities(sim: SimInternal): void {
     const numNeighbors = Math.floor(Math.random() * 3) // 0, 1, or 2
     for (let i = 0; i < Math.min(numNeighbors, neighbors.length); i++) {
       const neighbor = neighbors[i]
-      community.languageId = lang.id
-      community.prestige = lang.prestige
+      neighbor.languageId = lang.id
+      neighbor.prestige = lang.prestige
     }
   }
 }
