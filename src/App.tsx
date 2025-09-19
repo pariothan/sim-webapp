@@ -3,7 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Toolbar } from './ui/Toolbar'
 import { ConfigPanel } from './ui/ConfigPanel'
 import { Renderer } from './vis/Renderer'
-import { defaultConfig, MapMode, SimConfig, SimStateSnapshot } from './engine/types'
+import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData } from './engine/types'
+import { Inspector } from './ui/Inspector'
 
 const workerUrl = new URL('./worker.ts', import.meta.url,).href
 
@@ -14,7 +15,7 @@ export default function App(){
   const [mapMode, setMapMode] = useState<MapMode>('LANGUAGE')
   const [tick, setTick] = useState(0)
   const [tooltip, setTooltip] = useState<{x:number,y:number, text:string} | null>(null)
-    const [inspector, setInspector] = useState<InspectorData | null>(null)
+  const [inspector, setInspector] = useState<InspectorData | null>(null)
 
   const worker = useMemo(()=> new Worker(workerUrl, { type: 'module' }), [])
   const rendererRef = useRef<Renderer | null>(null)
@@ -31,6 +32,8 @@ export default function App(){
           rendererRef.current = new Renderer(canvasRef.current)
         }
         rendererRef.current?.render(snap, mapMode)
+      } else if(data.type === 'INSPECTOR') {
+        setInspector(data.payload)
       }
     }
     worker.addEventListener('message', onMsg)
@@ -134,6 +137,9 @@ export default function App(){
           <div className="tooltip" style={{left: tooltip.x, top: tooltip.y}}>
             {tooltip.text}
           </div>
+        )}
+        {inspector && (
+          <Inspector data={inspector} onClose={() => setInspector(null)} />
         )}
       </div>
     </div>
