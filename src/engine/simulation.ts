@@ -295,6 +295,34 @@ function getContactLanguages(languageId: number, sim: SimInternal): Language[] {
   return contactLanguages.slice(0, 5) // Limit to top 5 contact languages
 }
 
+function attemptLanguageAcquisition(community: Community, sim: SimInternal): void {
+  const { world } = sim
+  const { w, h, tiles } = world
+  
+  // Find neighboring communities with languages
+  const neighbors = getNeighbors(community.x, community.y, w, h)
+    .map(([nx, ny]) => {
+      const idx = ny * w + nx
+      const nbrId = tiles[idx]
+      return nbrId ? sim.communities.find(c => c.id === nbrId) : null
+    })
+    .filter(c => c !== null && c.languageId >= 0) as Community[]
+  
+  if (neighbors.length === 0) return
+  
+  // Choose neighbor with highest prestige
+  const bestNeighbor = neighbors.reduce((best, current) => 
+    current.prestige > best.prestige ? current : best
+  )
+  
+  // Acquire language with probability based on prestige difference
+  const acquisitionProb = Math.min(0.3, bestNeighbor.prestige * 0.5)
+  if (Math.random() < acquisitionProb) {
+    community.languageId = bestNeighbor.languageId
+    community.prestige = (community.prestige + bestNeighbor.prestige) / 2
+  }
+}
+
 function cleanupExtinctLanguages(sim: SimInternal): void {
   const activeLangIds = new Set(sim.communities.map(c => c.languageId).filter(id => id >= 0))
   
