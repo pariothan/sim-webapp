@@ -45,25 +45,44 @@ export default function App() {
         if (!rendererRef.current && canvasRef.current) {
           rendererRef.current = new Renderer(canvasRef.current)
         }
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = rect.width * dpr
-      canvas.height = rect.height * dpr
-      canvas.style.width = rect.width + 'px'
-      canvas.style.height = rect.height + 'px'
-      
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.scale(dpr, dpr)
-      }
+        if (rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
         }
-    // Use setTimeout to ensure DOM is ready
-    setTimeout(handleResize, 100)
+      } else if (data.type === 'FRAME') {
+        const snap: SimStateSnapshot = data.payload
+        if (rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
+        }
+      } else if (data.type === 'INSPECTOR') {
         setInspector(data.payload)
       }
     }
     worker.addEventListener('message', onMsg)
     return () => worker.removeEventListener('message', onMsg)
-  }, [worker])
+  }, [worker, mapMode])
+
+  // Handle canvas resize
+  const handleResize = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    canvas.style.width = rect.width + 'px'
+    canvas.style.height = rect.height + 'px'
+    
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.scale(dpr, dpr)
+    }
+  }
+
+  // Initial canvas setup
+  useEffect(() => {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
+  }, [])
 
   // React to cfg changes
   useEffect(() => {
