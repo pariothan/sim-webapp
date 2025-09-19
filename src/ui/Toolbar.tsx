@@ -1,5 +1,5 @@
 import React from 'react'
-import { MapMode } from '../engine/types'
+import { MapMode, SimulationStats } from '../engine/types'
 
 export function Toolbar(props: {
   running: boolean
@@ -9,11 +9,7 @@ export function Toolbar(props: {
   onNewWorld: () => void
   onReset: () => void
   tick: number
-  stats: {
-    totalLanguages: number
-    extinctLanguages: number
-    newLanguagesThisTick: number
-  }
+  stats: SimulationStats
 }) {
   const modes: MapMode[] = ['LANGUAGE', 'PHONEME_COUNT', 'SPEAKER_COUNT', 'PRESTIGE', 'FAMILY_TREE', 'VOCABULARY_SIZE']
   

@@ -6,7 +6,7 @@ import { Renderer } from './vis/Renderer'
 import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData, SimulationStats } from './engine/types'
 import { Inspector } from './ui/Inspector'
 
-const workerUrl = new URL('./worker.ts', import.meta.url).href
+const workerUrl = new URL('./components/SimulationWorker.ts', import.meta.url).href
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -42,8 +42,15 @@ export default function App() {
       if (data.type === 'ERROR') {
         console.error('Worker error:', data.payload)
       } else if (data.type === 'TICK') {
+      if (data.type === 'ERROR') {
+        console.error('Worker error:', data.payload)
+      } else if (data.type === 'TICK') {
         const snap: SimStateSnapshot = data.payload
         setTick(snap.tick)
+import { StatsPanel } from './ui/StatsPanel'
+import { Renderer } from './renderer/Renderer'
+import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData, SimulationStats } from './engine/types'
+import { Inspector } from './ui/Inspector'
         setStats(snap.stats)
         if (!rendererRef.current && canvasRef.current) {
           rendererRef.current = new Renderer(canvasRef.current)
