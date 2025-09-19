@@ -39,41 +39,22 @@ export default function App() {
       if (data.type === 'ERROR') {
         console.error('Worker error:', data.payload)
       } else if (data.type === 'TICK') {
-      if (data.type === 'ERROR') {
-        console.error('Worker error:', data.payload)
-      } else if (data.type === 'TICK') {
-      if (data.type === 'ERROR') {
-        console.error('Worker error:', data.payload)
-      } else if (data.type === 'TICK') {
         const snap: SimStateSnapshot = data.payload
         setTick(snap.tick)
-import { StatsPanel } from './ui/StatsPanel'
-import { Renderer } from './renderer/Renderer'
-import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData, SimulationStats } from './engine/types'
-import { Inspector } from './ui/Inspector'
         setStats(snap.stats)
         if (!rendererRef.current && canvasRef.current) {
           rendererRef.current = new Renderer(canvasRef.current)
         }
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = rect.width * dpr
-      canvas.height = rect.height * dpr
-      canvas.style.width = rect.width + 'px'
-      canvas.style.height = rect.height + 'px'
-      
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.scale(dpr, dpr)
-      }
+        if (rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
         }
-    // Use setTimeout to ensure DOM is ready
-    setTimeout(handleResize, 100)
+      } else if (data.type === 'INSPECTOR') {
         setInspector(data.payload)
       }
     }
     worker.addEventListener('message', onMsg)
     return () => worker.removeEventListener('message', onMsg)
-  }, [worker])
+  }, [worker, mapMode])
 
   // React to cfg changes
   useEffect(() => {
@@ -94,17 +75,26 @@ import { Inspector } from './ui/Inspector'
 
   // Canvas resize
   useEffect(() => {
-    const onResize = () => {
-      if (!canvasRef.current) return
-      const el = canvasRef.current
-      const rect = el.getBoundingClientRect()
-      el.width = Math.max(100, Math.floor(rect.width))
-      el.height = Math.max(100, Math.floor(rect.height))
+    const handleResize = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = rect.width + 'px'
+      canvas.style.height = rect.height + 'px'
+      
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
       worker.postMessage({ type: 'REQUEST_FRAME' })
     }
-    onResize()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [worker])
 
   // Hover tooltip
