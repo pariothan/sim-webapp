@@ -1,7 +1,6 @@
+export type MapMode = 'LANGUAGE' | 'PHONEME_COUNT' | 'SPEAKER_COUNT' | 'PRESTIGE' | 'FAMILY_TREE' | 'VOCABULARY_SIZE'
 
-export type MapMode = 'LANGUAGE' | 'PHONEME_COUNT' | 'SPEAKER_COUNT'
-
-export interface SimConfig{
+export interface SimConfig {
   gridW: number
   gridH: number
   landProb: number
@@ -11,8 +10,10 @@ export interface SimConfig{
   pBorrow: number
   pMutate: number
   pSplit: number
-  longDistance: number
+  pSoundChange: number
+  conservatismFactor: number
   prestigeThreshold: number
+  contactInfluence: number
 }
 
 export const defaultConfig: SimConfig = {
@@ -25,11 +26,13 @@ export const defaultConfig: SimConfig = {
   pBorrow: 0.12,
   pMutate: 0.05,
   pSplit: 0.01,
-  longDistance: 3,
+  pSoundChange: 0.08,
+  conservatismFactor: 0.5,
   prestigeThreshold: 0.6,
+  contactInfluence: 0.3
 }
 
-export interface Community{
+export interface Community {
   id: number
   x: number
   y: number
@@ -38,10 +41,19 @@ export interface Community{
   population: number
 }
 
+export interface Word {
+  stringForm: string
+  meaning: string
+  languageId: number
+  borrowedFrom?: number
+  creationTick: number
+  lastChanged: number
+}
 
-export interface Language{
+export interface Language {
   id: number
   name: string
+  phonemeInventory: string[]
   phonemeCount: number
   prestige: number
   familyId: number
@@ -49,27 +61,28 @@ export interface Language{
   conservatism: number
   parentId?: number
   vocabSize: number
-  phonemeInventory: string[]
+  lexicon: Map<string, Word>
   sampleWord: string
+  creationTick: number
+  lastEvolved: number
+  rules: import('./phonology').PhonologicalRuleSet
 }
 
-export interface World{
+export interface World {
   w: number
   h: number
-  tiles: (number | null)[] // communityId or null (water)
+  tiles: (number | null)[]
 }
 
-export interface SimStateSnapshot{
+export interface SimStateSnapshot {
   tick: number
   world: World
   communities: Community[]
   languages: Map<number, LanguageLike>
+  stats: SimulationStats
 }
 
-// Because postMessage can't transfer Map of complex types cleanly,
-// we'll define a serializable version:
-
-export interface LanguageLike{
+export interface LanguageLike {
   id: number
   name: string
   phonemeCount: number
@@ -81,23 +94,34 @@ export interface LanguageLike{
   vocabSize: number
   phonemeInventory: string[]
   sampleWord: string
+  creationTick: number
+  lastEvolved: number
+  speakerCount: number
 }
 
+export interface SimulationStats {
+  totalCommunities: number
+  speakingCommunities: number
+  totalLanguages: number
+  largestLanguage: number
+  languageDistribution: Record<number, number>
+  topLanguages: Array<{id: number, name: string, speakers: number}>
+  extinctLanguages: number
+  newLanguagesThisTick: number
+}
 
-export interface SelectedInfo{
+export interface SelectedInfo {
   x: number
   y: number
   communityId: number
   languageId: number
 }
 
-export interface InspectorData{
+export interface InspectorData {
+  community: Community
   language: LanguageLike & {
-    generation: number
-    conservatism: number
-    parentId?: number
-    vocabSize: number
-    phonemeInventory: string[]
-    sampleWord: string
+    lexiconSample: Array<{meaning: string, word: string, borrowed: boolean}>
+    contactLanguages: string[]
+    evolutionHistory: string[]
   }
 }
