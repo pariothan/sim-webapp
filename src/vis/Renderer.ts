@@ -32,10 +32,6 @@ export class Renderer{
           // water
           ctx.fillStyle = '#0a1020'
           ctx.fillRect(x*cellW, y*cellH, Math.ceil(cellW)+1, Math.ceil(cellH)+1);
-          const text = lang.sampleWord || lang.name;
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.fillText(text, x*cellW+2, y*cellH+1);
-          this.drawBoundary(x,y,cellW,cellH)
           continue
         }
         const c = communities[cid-1]
