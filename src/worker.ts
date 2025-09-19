@@ -2,54 +2,81 @@
 import { createSimulation, snapshot, step } from './engine/simulation'
 import { SimConfig, defaultConfig, InspectorData } from './engine/types'
 
-let cfg: SimConfig = { ...defaultConfig }
-let sim = createSimulation(cfg)
+let cfg: SimConfig
+let sim: any
 let running = true
 
+// Initialize immediately
+try {
+  cfg = { ...defaultConfig }
+  sim = createSimulation(cfg)
+  console.log('Worker initialized successfully')
+} catch (error) {
+  console.error('Worker initialization failed:', error)
+  postMessage({ type: 'ERROR', payload: error.message })
+}
+
 function loop() {
-  if (!running) return
+  if (!running || !sim) return
   
-  step(sim, cfg)
-  postMessage({ type: 'TICK', payload: snapshot(sim) })
+  try {
+    step(sim, cfg)
+    postMessage({ type: 'TICK', payload: snapshot(sim) })
+  } catch (error) {
+    console.error('Simulation step failed:', error)
+    postMessage({ type: 'ERROR', payload: error.message })
+    running = false
+    return
+  }
   
   // Moderate speed for better observation
   setTimeout(() => loop(), 200)
 }
 
 addEventListener('message', (e) => {
-  const msg = e.data
-  switch (msg.type) {
-    case 'INIT': {
-      cfg = { ...cfg, ...(msg.config || {}) }
-      sim = createSimulation(cfg)
-      loop()
-      break
+  try {
+    const msg = e.data
+    console.log('Worker received message:', msg.type)
+    
+    switch (msg.type) {
+      case 'INIT': {
+        cfg = { ...cfg, ...(msg.config || {}) }
+        sim = createSimulation(cfg)
+        console.log('Simulation created, starting loop')
+        loop()
+        break
+      }
+      case 'SET_CONFIG': {
+        cfg = { ...cfg, ...(msg.config || {}) }
+        break
+      }
+      case 'RESUME': 
+        running = true
+        loop()
+        break
+      case 'PAUSE': 
+        running = false
+        break
+      case 'NEW_WORLD': 
+        sim = createSimulation(cfg)
+        break
+      case 'RESET': 
+        sim = createSimulation(cfg)
+        break
+      case 'REQUEST_FRAME': 
+        if (sim) {
+          postMessage({ type: 'TICK', payload: snapshot(sim) })
+        }
+        break
+      case 'CLICK_AT': {
+        const res = getInspectorData(msg.x, msg.y)
+        postMessage({ type: 'INSPECTOR', payload: res })
+        break
+      }
     }
-    case 'SET_CONFIG': {
-      cfg = { ...cfg, ...(msg.config || {}) }
-      break
-    }
-    case 'RESUME': 
-      running = true
-      loop()
-      break
-    case 'PAUSE': 
-      running = false
-      break
-    case 'NEW_WORLD': 
-      sim = createSimulation(cfg)
-      break
-    case 'RESET': 
-      sim = createSimulation(cfg)
-      break
-    case 'REQUEST_FRAME': 
-      postMessage({ type: 'TICK', payload: snapshot(sim) })
-      break
-    case 'CLICK_AT': {
-      const res = getInspectorData(msg.x, msg.y)
-      postMessage({ type: 'INSPECTOR', payload: res })
-      break
-    }
+  } catch (error) {
+    console.error('Worker message handling failed:', error)
+    postMessage({ type: 'ERROR', payload: error.message })
   }
 })
 
