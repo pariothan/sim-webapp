@@ -86,6 +86,29 @@ export default function App(){
     return ()=> canvas.removeEventListener('mousemove', onMove)
   }, [])
 
+  // Click to open inspector
+  useEffect(()=>{
+    const canvas = canvasRef.current
+    if(!canvas) return
+    const onClick = (ev: MouseEvent)=>{
+      const rect = canvas.getBoundingClientRect()
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      if(rendererRef.current){
+        const snap = (rendererRef.current as any).lastSnap as SimStateSnapshot | null
+        if(snap){
+          const cellW = canvas.width / snap.world.w
+          const cellH = canvas.height / snap.world.h
+          const gx = Math.floor(x / cellW)
+          const gy = Math.floor(y / cellH)
+          worker.postMessage({type:'CLICK_AT', x: gx, y: gy})
+        }
+      }
+    }
+    canvas.addEventListener('click', onClick)
+    return ()=> canvas.removeEventListener('click', onClick)
+  }, [worker])
+
   return (
     <div className="app">
       <div className="toolbar">
@@ -116,27 +139,3 @@ export default function App(){
     </div>
   )
 }
-
-
-// Click to open inspector
-useEffect(()=>{
-  const canvas = canvasRef.current
-  if(!canvas) return
-  const onClick = (ev: MouseEvent)=>{
-    const rect = canvas.getBoundingClientRect()
-    const x = ev.clientX - rect.left
-    const y = ev.clientY - rect.top
-    if(rendererRef.current){
-      const snap = (rendererRef.current as any).lastSnap as SimStateSnapshot | null
-      if(snap){
-        const cellW = canvas.width / snap.world.w
-        const cellH = canvas.height / snap.world.h
-        const gx = Math.floor(x / cellW)
-        const gy = Math.floor(y / cellH)
-        worker.postMessage({type:'CLICK_AT', x: gx, y: gy})
-      }
-    }
-  }
-  canvas.addEventListener('click', onClick)
-  return ()=> canvas.removeEventListener('click', onClick)
-}, [worker])
