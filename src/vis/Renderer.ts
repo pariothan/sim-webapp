@@ -310,7 +310,17 @@ export class Renderer {
     if (cid == null) return 'Water'
     const c = communities[cid - 1]
     if (!c) return null
+    
+    // Check if community has no language assigned
+    if (c.languageId === -1) {
+      return `No language • pop: ${c.population} • prestige: ${(c.prestige * 100).toFixed(1)}%`
+    }
+    
     const lang = languages.get(c.languageId)!
+    if (!lang) {
+      return `Unknown language • pop: ${c.population} • prestige: ${(c.prestige * 100).toFixed(1)}%`
+    }
+    
     return `${lang.name} • phonemes: ${lang.phonemeCount} • prestige: ${(lang.prestige * 100).toFixed(1)}% • pop: ${c.population} • vocab: ${lang.vocabSize} • gen: ${lang.generation}`
   }
 }
