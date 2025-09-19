@@ -52,7 +52,7 @@ function seedCommunities(sim: SimInternal): void {
         id: nextCommunityId++,
         x,
         y,
-        languageId: -1, // Will be assigned language
+        languageId: -1, // Most start without language
         prestige: 0.3 + Math.random() * 0.4,
         population: 10 + Math.floor(Math.random() * 90)
       }
@@ -62,33 +62,45 @@ function seedCommunities(sim: SimInternal): void {
     }
   }
   
-  // Create initial languages and assign to communities
-  const starterWords = DEFAULT_CONFIG.STARTER_WORDS
-  const languagesPerStarter = Math.ceil(sim.communities.length / starterWords.length)
+  // Create only 2-3 initial languages in random locations
+  const numInitialLanguages = 2 + Math.floor(Math.random() * 2) // 2-3 languages
+  const starterWords = DEFAULT_CONFIG.STARTER_WORDS.slice(0, numInitialLanguages)
   
-  let communityIndex = 0
   for (const starterWord of starterWords) {
-    if (communityIndex >= sim.communities.length) break
-    
     const lang = createLanguage(undefined, sim.tick)
     sim.languages.set(lang.id, lang)
     
-    // Assign this language to several communities
-    for (let i = 0; i < languagesPerStarter && communityIndex < sim.communities.length; i++) {
-      const community = sim.communities[communityIndex]
+    // Find a random community without a language
+    const availableCommunities = sim.communities.filter(c => c.languageId === -1)
+    if (availableCommunities.length === 0) break
+    
+    const startCommunity = availableCommunities[Math.floor(Math.random() * availableCommunities.length)]
+    startCommunity.languageId = lang.id
+    startCommunity.prestige = lang.prestige
+    
+    // Optionally assign to 1-2 neighboring communities
+    const neighbors = getNeighbors(startCommunity.x, startCommunity.y, w, h)
+      .map(([nx, ny]) => {
+        const idx = ny * w + nx
+        const nbrId = tiles[idx]
+        return nbrId ? sim.communities.find(c => c.id === nbrId) : null
+      })
+      .filter(c => c !== null && c.languageId === -1) as Community[]
+    
+    // Assign to 0-2 neighbors
+    const numNeighbors = Math.floor(Math.random() * 3) // 0, 1, or 2
+    for (let i = 0; i < Math.min(numNeighbors, neighbors.length); i++) {
+      const neighbor = neighbors[i]
       community.languageId = lang.id
       community.prestige = lang.prestige
-      communityIndex++
     }
   }
-  
-  // Assign remaining communities to random existing languages
-  while (communityIndex < sim.communities.length) {
-    const languages = Array.from(sim.languages.keys())
-    const randomLangId = languages[Math.floor(Math.random() * languages.length)]
-    sim.communities[communityIndex].languageId = randomLangId
-    communityIndex++
-  }
+}
+
+function getNeighbors(x: number, y: number, w: number, h: number): [number, number][] {
+  return [
+    [x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]
+  ].filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < w && ny < h)
 }
 
 function neighbors(x: number, y: number, w: number, h: number): [number, number][] {
@@ -117,7 +129,13 @@ export function step(sim: SimInternal, cfg: SimConfig): void {
   
   // Process each community
   for (const community of shuffledCommunities) {
-    if (community.languageId < 0) continue
+    if (community.languageId < 0) {
+      // Community without language - might acquire one from neighbors
+      if (Math.random() < 0.05) { // 5% chance per tick
+        attemptLanguageAcquisition(community, sim)
+      }
+      continue
+    }
     
     const language = languages.get(community.languageId)
     if (!language) continue
