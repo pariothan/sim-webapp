@@ -92,43 +92,44 @@ export class Renderer{
     const lang = languages.get(c.languageId)!
     return `${lang.name} • phonemes: ${lang.phonemeCount} • prestige: ${lang.prestige.toFixed(2)} • pop: ${c.population}`
   }
-}
 
 
-private drawBoundary(x:number,y:number,cw:number,ch:number){
-  if(!this.lastSnap) return
-  const { world, communities } = this.lastSnap
-  const w = world.w, h = world.h
-  const idx = y*w + x
-  const cid = world.tiles[idx]
-  if(cid==null) return
-  const base = communities[cid-1]?.languageId
-  const ctx = this.ctx
 
-  // right edge
-  if(x+1<w){
-    const cid2 = world.tiles[y*w + (x+1)]
-    const base2 = (cid2==null)? null : communities[cid2-1]?.languageId
-    if(base2!==base){
-      ctx.strokeStyle = '#000'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo((x+1)*cw+0.5, y*ch)
-      ctx.lineTo((x+1)*cw+0.5, (y+1)*ch)
-      ctx.stroke()
+  private drawBoundary(x:number,y:number,cw:number,ch:number){
+    if(!this.lastSnap) return
+    const { world, communities } = this.lastSnap
+    const w = world.w, h = world.h
+    const idx = y*w + x
+    const cid = world.tiles[idx]
+    if(cid==null) return
+    const base = communities[cid-1]?.languageId
+    const ctx = this.ctx
+
+    // right edge
+    if(x+1<w){
+      const cid2 = world.tiles[y*w + (x+1)]
+      const base2 = (cid2==null)? null : communities[cid2-1]?.languageId
+      if(base2!==base){
+        ctx.strokeStyle = '#000'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo((x+1)*cw+0.5, y*ch)
+        ctx.lineTo((x+1)*cw+0.5, (y+1)*ch)
+        ctx.stroke()
+      }
     }
-  }
-  // bottom edge
-  if(y+1<h){
-    const cid3 = world.tiles[(y+1)*w + x]
-    const base3 = (cid3==null)? null : communities[cid3-1]?.languageId
-    if(base3!==base){
-      ctx.strokeStyle = '#000'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo(x*cw, (y+1)*ch+0.5)
-      ctx.lineTo((x+1)*cw, (y+1)*ch+0.5)
-      ctx.stroke()
+    // bottom edge
+    if(y+1<h){
+      const cid3 = world.tiles[(y+1)*w + x]
+      const base3 = (cid3==null)? null : communities[cid3-1]?.languageId
+      if(base3!==base){
+        ctx.strokeStyle = '#000'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(x*cw, (y+1)*ch+0.5)
+        ctx.lineTo((x+1)*cw, (y+1)*ch+0.5)
+        ctx.stroke()
+      }
     }
   }
 }
