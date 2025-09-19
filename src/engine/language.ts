@@ -61,6 +61,10 @@ export function createLanguage(parent?: Language, tick: number = 0): Language {
         lastChanged: tick
       }
       lexicon.set(meaning, word)
+    } else {
+      // Prevent infinite loop if we can't find new meanings
+      vocabSize = lexicon.size
+      break
     }
   }
   
@@ -134,17 +138,22 @@ export function evolveLanguage(lang: Language, tick: number, contactLanguages: L
   
   // Add new vocabulary occasionally
   if (Math.random() < 0.05 && lang.lexicon.size < 300) {
-    const meaning = getRandomMeaning()
-    if (!lang.lexicon.has(meaning)) {
-      const word: Word = {
-        stringForm: generateWord(lang.phonemeInventory),
-        meaning,
-        languageId: lang.id,
-        creationTick: tick,
-        lastChanged: tick
+    let attempts = 0
+    while (attempts < 10) {
+      const meaning = getRandomMeaning()
+      if (!lang.lexicon.has(meaning)) {
+        const word: Word = {
+          stringForm: generateWord(lang.phonemeInventory),
+          meaning,
+          languageId: lang.id,
+          creationTick: tick,
+          lastChanged: tick
+        }
+        lang.lexicon.set(meaning, word)
+        lang.vocabSize = lang.lexicon.size
+        break
       }
-      lang.lexicon.set(meaning, word)
-      lang.vocabSize = lang.lexicon.size
+      attempts++
     }
   }
 }
@@ -190,7 +199,9 @@ function generateInitialInventory(): string[] {
   
   // Add consonants
   const targetSize = 12 + Math.floor(Math.random() * 20)
+  let attempts = 0
   while (inventory.size < targetSize && inventory.size < INVENTORY.length) {
+    if (attempts++ > 100) break // Prevent infinite loop
     const pool = Math.random() < 0.3 ? vowels : consonants
     const phoneme = pool[Math.floor(Math.random() * pool.length)]
     inventory.add(phoneme)
@@ -202,6 +213,10 @@ function generateInitialInventory(): string[] {
 function mutatePhonemeInventory(inventory: string[]): void {
   const vowels = INVENTORY.filter(p => isSyllabic(p))
   const consonants = INVENTORY.filter(p => isConsonant(p))
+  
+  // Prevent inventory from becoming too small or too large
+  if (inventory.length < 5) return
+  if (inventory.length > 50) return
   
   if (Math.random() < 0.3) {
     // Add phoneme
