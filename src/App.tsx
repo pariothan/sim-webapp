@@ -1,298 +1,176 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { MapRenderer, MapMode } from './renderer/MapRenderer'
-import { ControlPanel } from './components/ControlPanel'
-import { MapModeSelector } from './components/MapModeSelector'
-import { StatsDisplay } from './components/StatsDisplay'
-import { ConfigPanel } from './components/ConfigPanel'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Toolbar } from './ui/Toolbar'
+import { ConfigPanel } from './ui/ConfigPanel'
+import { StatsPanel } from './ui/StatsPanel'
+import { Renderer } from './vis/Renderer'
+import { defaultConfig, MapMode, SimConfig, SimStateSnapshot, InspectorData, SimulationStats } from './engine/types'
 import { Inspector } from './ui/Inspector'
 
-const workerUrl = new URL('./components/SimulationWorker.ts', import.meta.url).href
-
-interface SimulationState {
-  tick: number
-  world: any
-  communities: any[]
-  languages: Map<number, any>
-  stats: {
-    totalCommunities: number
-    communitiesWithLanguage: number
-    totalLanguages: number
-    extinctLanguages: number
-    newLanguagesThisTick: number
-    largestLanguage: number
-    topLanguages: Array<{id: number, name: string, speakers: number}>
-  }
-}
-
-const defaultConfig = {
-  world: {
-    width: 30,
-    height: 20,
-    landProbability: 0.25,
-    islandBias: 0.45,
-    smoothingPasses: 3
-  },
-  spreadProbability: 0.22,
-  borrowProbability: 0.12,
-  evolutionProbability: 0.05,
-  splitProbability: 0.01
-}
+const workerUrl = new URL('./worker.ts', import.meta.url).href
 
 export default function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rendererRef = useRef<MapRenderer | null>(null)
-  const workerRef = useRef<Worker | null>(null)
-  
-  const [isRunning, setIsRunning] = useState(true)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [cfg, setCfg] = useState<SimConfig>({ ...defaultConfig })
+  const [running, setRunning] = useState(true)
   const [mapMode, setMapMode] = useState<MapMode>('LANGUAGE')
-  const [config, setConfig] = useState(defaultConfig)
-  const [state, setState] = useState<SimulationState | null>(null)
+  const [tick, setTick] = useState(0)
+  const [stats, setStats] = useState<SimulationStats>({
+    totalCommunities: 0,
+    speakingCommunities: 0,
+    totalLanguages: 0,
+    largestLanguage: 0,
+    languageDistribution: {},
+    topLanguages: [],
+    extinctLanguages: 0,
+    newLanguagesThisTick: 0
+  })
   const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null)
-  const [inspector, setInspector] = useState<any>(null)
+  const [inspector, setInspector] = useState<InspectorData | null>(null)
 
-  // Initialize worker and renderer
+  const worker = useMemo(() => new Worker(workerUrl, { type: 'module' }), [])
+  const rendererRef = useRef<Renderer | null>(null)
+
+  // Init worker
   useEffect(() => {
-    const worker = new Worker(workerUrl, { type: 'module' })
-    workerRef.current = worker
-
-    worker.addEventListener('message', (event) => {
-      const { type, payload } = event.data
-
-      switch (type) {
-        case 'READY':
-          worker.postMessage({ type: 'INIT', payload: config })
-          break
-
-        case 'STATE_UPDATE':
-          setState(payload)
-          if (rendererRef.current) {
-            rendererRef.current.render(payload, mapMode)
-          }
-          break
-
-        case 'ERROR':
-          console.error('Simulation error:', payload)
-          setIsRunning(false)
-          break
+    worker.postMessage({ type: 'INIT', config: cfg })
+    const onMsg = (e: MessageEvent) => {
+      const data = e.data
+      console.log('App received message:', data.type)
+      if (data.type === 'ERROR') {
+        console.error('Worker error:', data.payload)
+      } else if (data.type === 'TICK') {
+        const snap: SimStateSnapshot = data.payload
+        setTick(snap.tick)
+        setStats(snap.stats)
+        if (!rendererRef.current && canvasRef.current) {
+          rendererRef.current = new Renderer(canvasRef.current)
+        }
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = rect.width + 'px'
+      canvas.style.height = rect.height + 'px'
+      
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
       }
-    })
-
-    return () => {
-      worker.terminate()
+        }
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
+        setInspector(data.payload)
+      }
     }
-  }, [])
+    worker.addEventListener('message', onMsg)
+    return () => worker.removeEventListener('message', onMsg)
+  }, [worker])
 
-  // Initialize renderer when canvas is ready
+  // React to cfg changes
   useEffect(() => {
-    if (canvasRef.current && !rendererRef.current) {
-      rendererRef.current = new MapRenderer(canvasRef.current)
+    worker.postMessage({ type: 'SET_CONFIG', config: cfg })
+  }, [cfg, worker])
+
+  // Handle map mode changes by re-rendering
+  useEffect(() => {
+    if (rendererRef.current && canvasRef.current) {
+      worker.postMessage({ type: 'REQUEST_FRAME' })
     }
-  }, [])
+  }, [mapMode, worker])
 
-  // Handle canvas resize
+  // Run/pause
   useEffect(() => {
-    const handleResize = () => {
+    worker.postMessage({ type: running ? 'RESUME' : 'PAUSE' })
+  }, [running, worker])
+
+  // Canvas resize
+  useEffect(() => {
+    const onResize = () => {
       if (!canvasRef.current) return
-      
-      const canvas = canvasRef.current
-      const rect = canvas.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = rect.height
-      
-      if (rendererRef.current && state) {
-        rendererRef.current.render(state, mapMode)
-      }
+      const el = canvasRef.current
+      const rect = el.getBoundingClientRect()
+      el.width = Math.max(100, Math.floor(rect.width))
+      el.height = Math.max(100, Math.floor(rect.height))
+      worker.postMessage({ type: 'REQUEST_FRAME' })
     }
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [worker])
 
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [state, mapMode])
-
-  // Re-render when map mode changes
-  useEffect(() => {
-    if (rendererRef.current && state) {
-      rendererRef.current.render(state, mapMode)
-    }
-  }, [mapMode, state])
-
-  // Mouse events
+  // Hover tooltip
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !rendererRef.current) return
-
-    const handleMouseMove = (event: MouseEvent) => {
+    if (!canvas) return
+    const onMove = (ev: MouseEvent) => {
       const rect = canvas.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      
-      const tooltipText = rendererRef.current!.getTooltip(x, y)
-      if (tooltipText) {
-        setTooltip({
-          x: event.clientX,
-          y: event.clientY,
-          text: tooltipText
-        })
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      const hit = rendererRef.current?.hitTest(x, y)
+      if (hit) {
+        setTooltip({ x: ev.clientX, y: ev.clientY, text: hit })
       } else {
         setTooltip(null)
       }
     }
+    canvas.addEventListener('mousemove', onMove)
+    return () => canvas.removeEventListener('mousemove', onMove)
+  }, [])
 
-    const handleClick = (event: MouseEvent) => {
+  // Click to open inspector
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onClick = (ev: MouseEvent) => {
       const rect = canvas.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      
-      const inspectorData = rendererRef.current!.getInspectorData(x, y)
-      setInspector(inspectorData)
+      const x = ev.clientX - rect.left
+      const y = ev.clientY - rect.top
+      if (rendererRef.current) {
+        const snap = (rendererRef.current as any).lastSnap as SimStateSnapshot | null
+        if (snap) {
+          const cellW = canvas.width / snap.world.w
+          const cellH = canvas.height / snap.world.h
+          const gx = Math.floor(x / cellW)
+          const gy = Math.floor(y / cellH)
+          worker.postMessage({ type: 'CLICK_AT', x: gx, y: gy })
+        }
+      }
     }
-
-    canvas.addEventListener('mousemove', handleMouseMove)
-    canvas.addEventListener('click', handleClick)
-
-    return () => {
-      canvas.removeEventListener('mousemove', handleMouseMove)
-      canvas.removeEventListener('click', handleClick)
-    }
-  }, [])
-
-  const handleToggleRunning = useCallback(() => {
-    const newRunning = !isRunning
-    setIsRunning(newRunning)
-    
-    if (workerRef.current) {
-      workerRef.current.postMessage({ 
-        type: newRunning ? 'START' : 'STOP' 
-      })
-    }
-  }, [isRunning])
-
-  const handleReset = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.postMessage({ type: 'RESET' })
-    }
-  }, [])
-
-  const handleNewWorld = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.postMessage({ type: 'NEW_WORLD', payload: config })
-    }
-  }, [config])
-
-  const handleConfigChange = useCallback((newConfig: typeof config) => {
-    setConfig(newConfig)
-  }, [])
-
-  if (!state) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        background: '#0b0f14',
-        color: '#e7ecf2',
-        fontSize: '18px'
-      }}>
-        Loading simulation...
-      </div>
-    )
-  }
+    canvas.addEventListener('click', onClick)
+    return () => canvas.removeEventListener('click', onClick)
+  }, [worker])
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '320px 1fr',
-      gridTemplateRows: 'auto 1fr',
-      gridTemplateAreas: '"controls controls" "sidebar main"',
-      gap: '8px',
-      height: '100vh',
-      padding: '8px',
-      background: '#0b0f14',
-      color: '#e7ecf2'
-    }}>
-      {/* Controls */}
-      <div style={{ gridArea: 'controls', display: 'flex', gap: '16px', alignItems: 'center' }}>
-        <ControlPanel
-          isRunning={isRunning}
-          onToggleRunning={handleToggleRunning}
-          onReset={handleReset}
-          onNewWorld={handleNewWorld}
-          tick={state.tick}
-          stats={state.stats}
+    <div className="app">
+      <div className="toolbar">
+        <Toolbar
+          running={running}
+          onToggleRun={() => setRunning(v => !v)}
+          mapMode={mapMode}
+          setMapMode={setMapMode}
+          onNewWorld={() => worker.postMessage({ type: 'NEW_WORLD' })}
+          onReset={() => worker.postMessage({ type: 'RESET' })}
+          tick={tick}
+          stats={stats}
         />
-        <MapModeSelector mode={mapMode} onModeChange={setMapMode} />
       </div>
 
-      {/* Sidebar */}
-      <div style={{
-        gridArea: 'sidebar',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        overflow: 'auto'
-      }}>
-        <StatsDisplay stats={state.stats} tick={state.tick} />
-        <ConfigPanel config={config} onConfigChange={handleConfigChange} />
+      <div className="sidebar">
+        <ConfigPanel cfg={cfg} setCfg={setCfg} />
+        <StatsPanel stats={stats} tick={tick} />
       </div>
 
-      {/* Main canvas area */}
-      <div style={{
-        gridArea: 'main',
-        position: 'relative',
-        border: '1px solid #1c2531',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        background: '#0e141b'
-      }}>
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%'
-          }}
-        />
-        
-        {/* Legend */}
-        <div style={{
-          position: 'absolute',
-          bottom: '8px',
-          right: '8px',
-          background: 'rgba(0, 0, 0, 0.7)',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          color: '#e7ecf2'
-        }}>
-          Tick: {state.tick} • Mode: {mapMode.replace(/_/g, ' ')} • Languages: {state.stats.totalLanguages}
+      <div className="main">
+        <canvas ref={canvasRef} />
+        <div className="legend">
+          Tick: {tick} • Mode: {mapMode.replace(/_/g, ' ')} • Languages: {stats.totalLanguages}
         </div>
-
-        {/* Tooltip */}
         {tooltip && (
-          <div style={{
-            position: 'fixed',
-            left: tooltip.x + 10,
-            top: tooltip.y - 10,
-            background: 'rgba(0, 0, 0, 0.9)',
-            color: '#e7ecf2',
-            padding: '8px 12px',
-            borderRadius: '6px',
-            fontSize: '12px',
-            pointerEvents: 'none',
-            zIndex: 1000,
-            maxWidth: '300px'
-          }}>
+          <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
             {tooltip.text}
           </div>
         )}
-
-        {/* Inspector */}
         {inspector && (
-          <Inspector 
-            data={inspector} 
-            onClose={() => setInspector(null)} 
-          />
+          <Inspector data={inspector} onClose={() => setInspector(null)} />
         )}
       </div>
     </div>
