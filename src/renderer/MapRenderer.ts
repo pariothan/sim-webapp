@@ -48,6 +48,11 @@ export default function App() {
         if (rendererRef.current) {
           rendererRef.current.render(snap, mapMode)
         }
+      } else if (data.type === 'FRAME') {
+        const snap: SimStateSnapshot = data.payload
+        if (rendererRef.current) {
+          rendererRef.current.render(snap, mapMode)
+        }
       } else if (data.type === 'INSPECTOR') {
         setInspector(data.payload)
       }
@@ -55,6 +60,29 @@ export default function App() {
     worker.addEventListener('message', onMsg)
     return () => worker.removeEventListener('message', onMsg)
   }, [worker, mapMode])
+
+  // Handle canvas resize
+  const handleResize = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    canvas.style.width = rect.width + 'px'
+    canvas.style.height = rect.height + 'px'
+    
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.scale(dpr, dpr)
+    }
+  }
+
+  // Initial canvas setup
+  useEffect(() => {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(handleResize, 100)
+  }, [])
 
   // React to cfg changes
   useEffect(() => {
@@ -75,29 +103,17 @@ export default function App() {
 
   // Canvas resize
   useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      
-      const rect = canvas.getBoundingClientRect()
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = rect.width * dpr
-      canvas.height = rect.height * dpr
-      canvas.style.width = rect.width + 'px'
-      canvas.style.height = rect.height + 'px'
-      
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.scale(dpr, dpr)
-      }
-      
+    const onResize = () => {
+      if (!canvasRef.current) return
+      const el = canvasRef.current
+      const rect = el.getBoundingClientRect()
+      el.width = Math.max(100, Math.floor(rect.width))
+      el.height = Math.max(100, Math.floor(rect.height))
       worker.postMessage({ type: 'REQUEST_FRAME' })
     }
-    
-    // Use setTimeout to ensure DOM is ready
-    setTimeout(handleResize, 100)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [worker])
 
   // Hover tooltip
