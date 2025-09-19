@@ -35,10 +35,10 @@ export interface Config {
 
 export const DEFAULT_CONFIG: Config = {
   // World generation
-  GRID_WIDTH: 120,
-  GRID_HEIGHT: 80,
-  LAND_PROBABILITY: 0.52,
-  ISLAND_BIAS: 0.35,
+  GRID_WIDTH: 30,
+  GRID_HEIGHT: 20,
+  LAND_PROBABILITY: 0.12,
+  ISLAND_BIAS: 0.55,
   SMOOTH_STEPS: 3,
   
   // Simulation parameters
