@@ -167,7 +167,7 @@ function attemptLanguageSpread(
   for (const neighbor of neighbors) {
     if (neighbor.languageId === community.languageId) continue
     
-    const spreadProb = spreadStrength * 0.1
+    const spreadProb = Math.min(0.3, spreadStrength * 0.1)
     if (Math.random() < spreadProb) {
       const oldLangId = neighbor.languageId
       neighbor.languageId = community.languageId
@@ -225,7 +225,7 @@ function attemptLanguageSplit(
 ): void {
   // Only split if language has enough speakers
   const speakers = sim.communities.filter(c => c.languageId === language.id)
-  if (speakers.length < 5) return
+  if (speakers.length < 8) return
   
   // Create daughter language
   const daughter = splitLanguage(language, sim.tick)
@@ -233,7 +233,7 @@ function attemptLanguageSplit(
   sim.stats.newLanguagesThisTick++
   
   // Assign some speakers to daughter language
-  const splitSize = Math.min(3, Math.floor(speakers.length / 2))
+  const splitSize = Math.min(2, Math.floor(speakers.length / 3))
   const communitiesToSplit = speakers
     .sort(() => Math.random() - 0.5)
     .slice(0, splitSize)

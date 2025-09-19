@@ -90,10 +90,13 @@ export function createLanguage(parent?: Language, tick: number = 0): Language {
 }
 
 export function evolveLanguage(lang: Language, tick: number, contactLanguages: Language[] = []): void {
+  // Prevent excessive evolution calls
+  if (tick - lang.lastEvolved < 5) return
+  
   lang.lastEvolved = tick
   
   // Phonological evolution
-  if (Math.random() < 0.4) {
+  if (Math.random() < 0.2) {
     mutatePhonemeInventory(lang.phonemeInventory)
     lang.phonemeCount = lang.phonemeInventory.length
   }
@@ -102,11 +105,11 @@ export function evolveLanguage(lang: Language, tick: number, contactLanguages: L
   lang.rules.evolve(tick, lang.conservatism)
   
   // Evolve some words
-  const wordsToEvolve = Math.floor(lang.lexicon.size * 0.05) // 5% of vocabulary
+  const wordsToEvolve = Math.min(3, Math.floor(lang.lexicon.size * 0.02)) // Max 3 words, 2% of vocabulary
   const words = Array.from(lang.lexicon.values())
   for (let i = 0; i < wordsToEvolve; i++) {
     const word = words[Math.floor(Math.random() * words.length)]
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.1) {
       const oldForm = word.stringForm
       word.stringForm = evolveWord(oldForm, lang.phonemeInventory, lang.rules, tick)
       word.lastChanged = tick
@@ -130,7 +133,7 @@ export function evolveLanguage(lang: Language, tick: number, contactLanguages: L
   }
   
   // Add new vocabulary occasionally
-  if (Math.random() < 0.1 && lang.lexicon.size < 500) {
+  if (Math.random() < 0.05 && lang.lexicon.size < 300) {
     const meaning = getRandomMeaning()
     if (!lang.lexicon.has(meaning)) {
       const word: Word = {
