@@ -11,7 +11,7 @@ function loop() {
   step(sim, cfg)
   postMessage({ type: 'TICK', payload: snapshot(sim) })
   // Moderate speed for better observation
-  setTimeout(() => loop(), 100)
+  setTimeout(() => loop(), 200)
 }
 
 addEventListener('message', (e) => {

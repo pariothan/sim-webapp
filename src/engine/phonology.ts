@@ -157,11 +157,17 @@ export class PhonologicalRuleSet {
 
   evolve(tick: number, conservatism: number): void {
     // Add new rules occasionally
-    if (Math.random() < (1 - conservatism) * 0.05) {
+    if (Math.random() < (1 - conservatism) * 0.01) {
       const newRule = this.generateRandomRule(tick)
       if (newRule) {
         this.addRule(newRule)
       }
+    }
+    
+    // Limit total number of rules to prevent performance issues
+    if (this.rules.length > 10) {
+      this.rules = this.rules.slice(-8) // Keep only the 8 most recent rules
+      this.version++
     }
   }
 
