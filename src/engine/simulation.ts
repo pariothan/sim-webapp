@@ -110,12 +110,6 @@ function neighbors(x: number, y: number, w: number, h: number): [number, number]
 }
 
 export function step(sim: SimInternal, cfg: SimConfig): void {
-  // Prevent runaway tick counts
-  if (sim.tick > 10000) {
-    console.warn('Simulation reached maximum ticks, stopping')
-    return
-  }
-  
   sim.tick++
   sim.stats.newLanguagesThisTick = 0
   

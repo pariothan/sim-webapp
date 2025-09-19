@@ -9,14 +9,8 @@ let running = true
 function loop() {
   if (!running) return
   
-  try {
   step(sim, cfg)
   postMessage({ type: 'TICK', payload: snapshot(sim) })
-  } catch (error) {
-    console.error('Simulation error:', error)
-    running = false
-    return
-  }
   
   // Moderate speed for better observation
   setTimeout(() => loop(), 200)

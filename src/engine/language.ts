@@ -194,14 +194,12 @@ function generateInitialInventory(): string[] {
   const inventory = new Set<string>()
   
   // Ensure at least 3 vowels
-  const selectedVowels = vowels.sort(() => Math.random() - 0.5).slice(0, Math.max(3, Math.floor(Math.random() * 6) + 3))
+  const selectedVowels = vowels.sort(() => Math.random() - 0.5).slice(0, 3 + Math.floor(Math.random() * 3))
   selectedVowels.forEach(v => inventory.add(v))
   
   // Add consonants
   const targetSize = 12 + Math.floor(Math.random() * 20)
-  let attempts = 0
-  while (inventory.size < targetSize && inventory.size < INVENTORY.length) {
-    if (attempts++ > 100) break // Prevent infinite loop
+  while (inventory.size < targetSize && inventory.size < INVENTORY.length && inventory.size < 40) {
     const pool = Math.random() < 0.3 ? vowels : consonants
     const phoneme = pool[Math.floor(Math.random() * pool.length)]
     inventory.add(phoneme)
@@ -214,20 +212,16 @@ function mutatePhonemeInventory(inventory: string[]): void {
   const vowels = INVENTORY.filter(p => isSyllabic(p))
   const consonants = INVENTORY.filter(p => isConsonant(p))
   
-  // Prevent inventory from becoming too small or too large
-  if (inventory.length < 5) return
-  if (inventory.length > 50) return
-  
   if (Math.random() < 0.3) {
     // Add phoneme
     const pool = Math.random() < 0.4 ? vowels : consonants
     const candidate = pool[Math.floor(Math.random() * pool.length)]
-    if (!inventory.includes(candidate)) {
+    if (!inventory.includes(candidate) && inventory.length < 45) {
       inventory.push(candidate)
     }
   }
   
-  if (Math.random() < 0.2 && inventory.length > 8) {
+  if (Math.random() < 0.2 && inventory.length > 10) {
     // Remove phoneme
     const index = Math.floor(Math.random() * inventory.length)
     inventory.splice(index, 1)
