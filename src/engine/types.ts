@@ -17,10 +17,10 @@ export interface SimConfig {
 }
 
 export const defaultConfig: SimConfig = {
-  gridW: 120,
-  gridH: 80,
-  landProb: 0.52,
-  islandBias: 0.35,
+  gridW: 60,
+  gridH: 40,
+  landProb: 0.25,
+  islandBias: 0.45,
   smoothSteps: 3,
   pSpread: 0.22,
   pBorrow: 0.12,
